@@ -1,0 +1,21 @@
+[package]
+name = "hermes-perception"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hermes-core = { workspace = true }
+hermes-safety = { workspace = true }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+notify = { workspace = true }
+sysinfo = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

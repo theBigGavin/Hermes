@@ -1,0 +1,21 @@
+[package]
+name = "hermes-daemon"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "hermes"
+path = "src/main.rs"
+
+[dependencies]
+hermes-core = { workspace = true }
+hermes-interface = { workspace = true }
+
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }

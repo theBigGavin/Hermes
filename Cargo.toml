@@ -1,0 +1,91 @@
+[workspace]
+members = [
+    "hermes-core",
+    "hermes-safety",
+    "hermes-perception",
+    "hermes-action",
+    "hermes-memory",
+    "hermes-meta",
+    "hermes-interface",
+    "hermes-daemon",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0-alpha"
+edition = "2021"
+authors = ["HermesOS <hermes@localhost>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/hermes-os/hermes"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# 异步运行时
+tokio = { version = "1.35", features = ["full"] }
+tokio-test = "0.4"
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# 错误处理
+thiserror = "1.0"
+anyhow = "1.0"
+
+# 日志与追踪
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# 时间处理
+chrono = { version = "0.4", features = ["serde"] }
+
+# 存储
+sled = "0.34"
+
+# 文件监控
+notify = "6.1"
+
+# 命令行
+clap = { version = "4.4", features = ["derive"] }
+
+# 终端UI
+ratatui = "0.24"
+crossterm = "0.27"
+
+# UUID
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# 正则
+regex = "1.10"
+
+# 路径处理
+home = "0.5"
+dirs = "5.0"
+
+# 进程管理
+sysinfo = "0.30"
+walkdir = "2.4"
+
+# HTTP客户端
+reqwest = { version = "0.11", features = ["json"] }
+
+# 内部依赖（将在各crate中定义）
+hermes-core = { path = "hermes-core" }
+hermes-safety = { path = "hermes-safety" }
+hermes-perception = { path = "hermes-perception" }
+hermes-action = { path = "hermes-action" }
+hermes-memory = { path = "hermes-memory" }
+hermes-meta = { path = "hermes-meta" }
+hermes-interface = { path = "hermes-interface" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
