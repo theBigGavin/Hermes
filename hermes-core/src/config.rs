@@ -11,22 +11,29 @@ use tracing::{debug, info, warn};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// 身份配置
+    #[serde(default)]
     pub identity: IdentityConfig,
     /// 原则配置
+    #[serde(default)]
     pub principles: PrinciplesConfig,
     /// 安全配置
+    #[serde(default)]
     pub safety: SafetyConfig,
     /// 记忆配置
+    #[serde(default)]
     pub memory: MemoryConfig,
     /// LLM 配置
+    #[serde(default)]
     pub llm: LLMConfig,
     /// 自主模式配置
+    #[serde(default)]
     pub autonomous: AutonomousConfig,
     /// 日志配置
+    #[serde(default)]
     pub logging: LoggingConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct IdentityConfig {
     pub name: String,
     pub version: String,
@@ -34,14 +41,14 @@ pub struct IdentityConfig {
     pub purpose: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PrinciplesConfig {
     pub first_law: String,
     pub second_law: String,
     pub third_law: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SafetyConfig {
     pub filesystem: FilesystemSafety,
     pub system: SystemSafety,
@@ -49,41 +56,41 @@ pub struct SafetyConfig {
     pub self_modification: SelfModificationSafety,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FilesystemSafety {
     pub read: Vec<String>,
     pub write: Vec<String>,
     pub forbidden: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SystemSafety {
     pub allowed_commands: Vec<String>,
     pub forbidden_patterns: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkSafety {
     pub allow_outbound: bool,
     pub allowed_hosts: Vec<String>,
     pub allow_inbound: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SelfModificationSafety {
     pub enabled: bool,
     pub rate_limit_per_hour: u32,
     pub require_human_confirmation_above: crate::RiskLevel,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MemoryConfig {
     pub persistence_path: String,
     pub working_memory_limit_mb: u64,
 }
 
 /// LLM 配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LLMConfig {
     /// 提供商（kimi, openai, local 等）
     pub provider: String,
@@ -104,7 +111,7 @@ pub struct LLMConfig {
 }
 
 /// 自主模式配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AutonomousConfig {
     /// 是否启用自主模式
     pub enabled: bool,
@@ -118,7 +125,7 @@ pub struct AutonomousConfig {
     pub max_consecutive_errors: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LoggingConfig {
     pub level: String,
     pub audit: bool,
@@ -341,6 +348,20 @@ max_consecutive_errors = 3
 persistence_path = "~/.local/share/hermes/memory.db"
 # 工作内存限制（MB）
 working_memory_limit_mb = 100
+
+[safety.filesystem]
+read = ["./**"]
+write = ["./**"]
+forbidden = ["~/.ssh/**", "~/.password*", "/etc/shadow"]
+
+[safety.system]
+allowed_commands = ["git", "cargo", "rustc", "python3", "ls", "cat", "echo", "mkdir", "touch"]
+forbidden_patterns = ["rm -rf /", "dd if=/dev/zero"]
+
+[safety.network]
+allow_outbound = true
+allowed_hosts = ["*"]
+allow_inbound = false
 
 [safety.self_modification]
 # 是否允许自我修改

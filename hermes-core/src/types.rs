@@ -87,8 +87,9 @@ impl Outcome {
 }
 
 /// 风险等级
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub enum RiskLevel {
+    #[default]
     None,
     Low,
     Medium,
