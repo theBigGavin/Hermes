@@ -73,11 +73,10 @@ pub enum Commands {
     /// 技能列表
     Skills,
     
-    /// 配置
+    /// 配置管理
     Config {
-        /// 查看配置
-        #[arg(long)]
-        show: bool,
+        #[command(subcommand)]
+        action: ConfigAction,
     },
     
     /// 交互式对话模式（TUI）
@@ -88,6 +87,16 @@ pub enum Commands {
     
     /// 自主模式（版本 C - 持续运行）
     Auto,
+}
+
+#[derive(Subcommand)]
+pub enum ConfigAction {
+    /// 初始化配置文件
+    Init,
+    /// 查看当前配置
+    Show,
+    /// 编辑配置文件路径
+    Path,
 }
 
 #[derive(Subcommand)]
@@ -103,7 +112,11 @@ pub enum ActionCommand {
 }
 
 /// 运行 CLI
-pub async fn run(cli: Cli, hermes: &mut crate::HermesOS) -> anyhow::Result<()> {
+pub async fn run(
+    cli: Cli, 
+    hermes: &mut crate::HermesOS,
+    config: hermes_core::Config,
+) -> anyhow::Result<()> {
     // 设置日志
     let level = match cli.log_level.as_str() {
         "trace" => Level::TRACE,
@@ -250,12 +263,40 @@ pub async fn run(cli: Cli, hermes: &mut crate::HermesOS) -> anyhow::Result<()> {
             }
         }
 
-        Commands::Config { show } => {
-            if show {
-                let config = hermes.config();
-                println!("{}", serde_json::to_string_pretty(&config)?);
-            } else {
-                println!("使用 --show 查看配置");
+        Commands::Config { action } => {
+            match action {
+                ConfigAction::Init => {
+                    // 创建示例配置
+                    let example_config = hermes_core::Config::default();
+                    match example_config.create_example().await {
+                        Ok(_) => {
+                            let config_path = hermes_core::Config::default_path()?;
+                            println!("示例配置已创建: {:?}", config_path.with_file_name("config.example.toml"));
+                            println!("请复制并修改为 config.toml，填入你的 API Key");
+                        }
+                        Err(e) => {
+                            eprintln!("创建示例配置失败: {}", e);
+                        }
+                    }
+                }
+                ConfigAction::Show => {
+                    println!("{}", serde_json::to_string_pretty(&config)?);
+                }
+                ConfigAction::Path => {
+                    match hermes_core::Config::default_path() {
+                        Ok(path) => {
+                            println!("默认配置文件路径: {:?}", path);
+                            if path.exists() {
+                                println!("状态: 已存在");
+                            } else {
+                                println!("状态: 不存在");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("无法获取配置路径: {}", e);
+                        }
+                    }
+                }
             }
         }
 
@@ -270,7 +311,17 @@ pub async fn run(cli: Cli, hermes: &mut crate::HermesOS) -> anyhow::Result<()> {
         
         Commands::Auto => {
             println!("启动 HermesOS 自主模式...");
-            println!("提示: 确保已设置 KIMI_API_KEY 环境变量");
+            
+            // 检查 API Key 是否已配置
+            if config.llm.api_key.is_empty() {
+                eprintln!("错误: LLM API Key 未配置");
+                eprintln!("请在配置文件中设置 api_key:");
+                eprintln!("  配置文件路径: ~/.config/hermes/config.toml");
+                eprintln!("  或运行: hermes config --init");
+                return Ok(());
+            }
+            
+            println!("使用模型: {}", config.llm.model);
             println!();
             
             // 自主模式需要独占 HermesOS，创建独立实例
@@ -282,7 +333,7 @@ pub async fn run(cli: Cli, hermes: &mut crate::HermesOS) -> anyhow::Result<()> {
                 }
             };
             
-            if let Err(e) = crate::autonomous::run_autonomous(hermes_local).await {
+            if let Err(e) = crate::autonomous::run_autonomous(hermes_local, config).await {
                 eprintln!("自主模式错误: {}", e);
             }
         }

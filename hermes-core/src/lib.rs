@@ -8,9 +8,11 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+pub mod config;
 pub mod error;
 pub mod types;
 
+pub use config::{Config, LLMConfig, AutonomousConfig};
 pub use error::{HermesError, Result, SafetyError};
 pub use types::*;
 

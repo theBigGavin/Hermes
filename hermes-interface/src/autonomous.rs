@@ -11,32 +11,10 @@ use hermes_memory::checkpoint::{AutoCheckpointCondition, CheckpointManager, Full
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-use crate::kimi_bridge::{KimiBridge, KimiConfig};
+use hermes_core::{AutonomousConfig, LLMConfig};
+
+use crate::kimi_bridge::KimiBridge;
 use crate::HermesOS;
-
-/// 自主模式配置
-#[derive(Clone, Debug)]
-pub struct AutonomousConfig {
-    /// 感知间隔（秒）
-    pub perception_interval_secs: u64,
-    /// 反思间隔（分钟）
-    pub reflection_interval_mins: u64,
-    /// 是否需要人类确认
-    pub require_human_confirmation: bool,
-    /// 最大连续错误次数
-    pub max_consecutive_errors: u32,
-}
-
-impl Default for AutonomousConfig {
-    fn default() -> Self {
-        Self {
-            perception_interval_secs: 30,
-            reflection_interval_mins: 60,
-            require_human_confirmation: true,
-            max_consecutive_errors: 3,
-        }
-    }
-}
 
 /// 观察到的现象
 #[derive(Debug, Clone)]
@@ -94,10 +72,10 @@ impl AutonomousSystem {
     /// 创建自主系统
     pub async fn new(
         hermes: HermesOS,
-        kimi_config: KimiConfig,
+        llm_config: LLMConfig,
         config: AutonomousConfig,
     ) -> Result<Self> {
-        let kimi = KimiBridge::new(kimi_config)?;
+        let kimi = KimiBridge::new(llm_config)?;
         
         let checkpoint_path = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
@@ -439,11 +417,8 @@ impl AutonomousSystem {
 }
 
 /// 运行自主模式
-pub async fn run_autonomous(hermes: HermesOS) -> Result<()> {
-    let kimi_config = KimiConfig::from_env()?;
-    let config = AutonomousConfig::default();
-    
-    let system = AutonomousSystem::new(hermes, kimi_config, config).await?;
+pub async fn run_autonomous(hermes: HermesOS, config: hermes_core::Config) -> Result<()> {
+    let system = AutonomousSystem::new(hermes, config.llm, config.autonomous).await?;
     
     println!("\n🏛️  HermesOS 自主模式");
     println!("======================");

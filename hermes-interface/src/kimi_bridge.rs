@@ -4,54 +4,19 @@
 
 use std::time::Duration;
 
-use hermes_core::{HermesError, Result};
+use hermes_core::{HermesError, LLMConfig, Result};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
-/// Kimi API 配置
-#[derive(Clone, Debug)]
-pub struct KimiConfig {
-    pub api_key: String,
-    pub base_url: String,
-    pub model: String,
-    pub timeout: Duration,
-    pub max_context_length: usize,
-}
-
-impl KimiConfig {
-    /// 从环境变量创建配置
-    pub fn from_env() -> Result<Self> {
-        let api_key = std::env::var("KIMI_API_KEY")
-            .map_err(|_| HermesError::Config(
-                "KIMI_API_KEY 环境变量未设置".to_string()
-            ))?;
-        
-        let base_url = std::env::var("KIMI_BASE_URL")
-            .unwrap_or_else(|_| "https://api.moonshot.cn/v1".to_string());
-        
-        let model = std::env::var("KIMI_MODEL")
-            .unwrap_or_else(|_| "kimi-latest".to_string());
-        
-        Ok(Self {
-            api_key,
-            base_url,
-            model,
-            timeout: Duration::from_secs(120),
-            max_context_length: 8192,
-        })
-    }
-    
-    /// 使用默认配置（用于测试）
-    pub fn default_with_key(api_key: String) -> Self {
-        Self {
-            api_key,
-            base_url: "https://api.moonshot.cn/v1".to_string(),
-            model: "kimi-latest".to_string(),
-            timeout: Duration::from_secs(120),
-            max_context_length: 8192,
-        }
-    }
-}
+/// 从配置创建 Kimi Bridge
+/// 
+/// 配置文件路径优先级：
+/// 1. 命令行参数 --config
+/// 2. 环境变量 HERMES_CONFIG
+/// 3. ~/.config/hermes/config.toml
+/// 4. ./hermes.toml
+/// 
+/// 配置文件示例见 config.example.toml
 
 /// 消息角色
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,7 +92,7 @@ struct Usage {
 
 /// Kimi API 客户端
 pub struct KimiBridge {
-    config: KimiConfig,
+    config: LLMConfig,
     client: reqwest::Client,
     /// 系统提示词（包含初衷）
     system_prompt: String,
@@ -139,9 +104,9 @@ pub struct KimiBridge {
 
 impl KimiBridge {
     /// 创建新的 Kimi Bridge
-    pub fn new(config: KimiConfig) -> Result<Self> {
+    pub fn new(config: LLMConfig) -> Result<Self> {
         let client = reqwest::Client::builder()
-            .timeout(config.timeout)
+            .timeout(Duration::from_secs(config.timeout_secs))
             .build()
             .map_err(|e| HermesError::Other(format!("无法创建 HTTP 客户端: {}", e)))?;
         

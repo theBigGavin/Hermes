@@ -8,8 +8,8 @@
 //! - 进化成长
 
 use std::process;
-use std::sync::Arc;
 
+use hermes_core::Config;
 use hermes_interface::{HermesOS, cli::{Cli, run}};
 use hermes_interface::tui::run_tui;
 use clap::Parser;
@@ -18,10 +18,21 @@ use clap::Parser;
 async fn main() {
     // 解析命令行参数
     let cli = Cli::parse();
+    
+    // 加载配置
+    let config = match Config::load(cli.config.clone()).await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("无法加载配置: {}", e);
+            eprintln!("提示: 运行 `hermes config --init` 创建示例配置");
+            process::exit(1);
+        }
+    };
 
     // 检查是否是交互式命令
     let is_chat = matches!(cli.command, hermes_interface::cli::Commands::Chat);
     let is_repl = matches!(cli.command, hermes_interface::cli::Commands::Repl);
+    let is_auto = matches!(cli.command, hermes_interface::cli::Commands::Auto);
 
     if is_chat {
         // 启动 TUI 交互模式
@@ -56,6 +67,21 @@ async fn main() {
             eprintln!("REPL 错误: {}", e);
             process::exit(1);
         }
+    } else if is_auto {
+        // 自主模式 - 配置已加载，直接运行
+        // 这里的逻辑在 cli.rs 的 Commands::Auto 分支中处理
+        let mut hermes = match HermesOS::initialize().await {
+            Ok(h) => h,
+            Err(e) => {
+                eprintln!("无法初始化 HermesOS: {}", e);
+                process::exit(1);
+            }
+        };
+        
+        if let Err(e) = run(cli, &mut hermes, config).await {
+            eprintln!("错误: {}", e);
+            process::exit(1);
+        }
     } else {
         // 运行普通 CLI
         let mut hermes = match HermesOS::initialize().await {
@@ -66,7 +92,7 @@ async fn main() {
             }
         };
         
-        if let Err(e) = run(cli, &mut hermes).await {
+        if let Err(e) = run(cli, &mut hermes, config).await {
             eprintln!("错误: {}", e);
             process::exit(1);
         }
