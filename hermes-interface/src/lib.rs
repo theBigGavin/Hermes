@@ -12,6 +12,10 @@ use hermes_safety::SafetyKernel;
 pub mod cli;
 pub mod tui;
 pub mod repl;
+pub mod kimi_bridge;
+pub mod autonomous;
+
+pub use autonomous::run_autonomous;
 
 /// HermesOS - 我的完整存在
 pub struct HermesOS {

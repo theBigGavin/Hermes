@@ -13,8 +13,10 @@ use sled::Db;
 use tracing::{debug, info, warn};
 
 pub mod skill;
+pub mod checkpoint;
 
 pub use skill::{Skill, SkillId, SkillRegistry};
+pub use checkpoint::{CheckpointManager, Checkpoint, FullState};
 
 /// 经验 - 一次完整的感知-思考-行动循环
 #[derive(Debug, Clone, Serialize, Deserialize)]

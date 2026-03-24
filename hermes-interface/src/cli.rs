@@ -85,6 +85,9 @@ pub enum Commands {
     
     /// REPL 模式（简单对话循环）
     Repl,
+    
+    /// 自主模式（版本 C - 持续运行）
+    Auto,
 }
 
 #[derive(Subcommand)]
@@ -263,6 +266,25 @@ pub async fn run(cli: Cli, hermes: &mut crate::HermesOS) -> anyhow::Result<()> {
 
         Commands::Repl => {
             crate::repl::run_repl(hermes).await?;
+        }
+        
+        Commands::Auto => {
+            println!("启动 HermesOS 自主模式...");
+            println!("提示: 确保已设置 KIMI_API_KEY 环境变量");
+            println!();
+            
+            // 自主模式需要独占 HermesOS，创建独立实例
+            let hermes_local = match crate::HermesOS::initialize().await {
+                Ok(h) => h,
+                Err(e) => {
+                    eprintln!("无法初始化 HermesOS: {}", e);
+                    return Ok(());
+                }
+            };
+            
+            if let Err(e) = crate::autonomous::run_autonomous(hermes_local).await {
+                eprintln!("自主模式错误: {}", e);
+            }
         }
     }
 
