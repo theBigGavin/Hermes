@@ -10,8 +10,9 @@
 use std::process;
 
 use hermes_core::Config;
-use hermes_interface::{HermesOS, cli::{Cli, run}};
+use hermes_interface::{HermesOS, cli::{Cli, run, Commands}};
 use hermes_interface::tui::run_tui;
+use hermes_interface::oauth::OAuthManager;
 use clap::Parser;
 
 #[tokio::main]
@@ -33,8 +34,47 @@ async fn main() {
     let is_chat = matches!(cli.command, hermes_interface::cli::Commands::Chat);
     let is_repl = matches!(cli.command, hermes_interface::cli::Commands::Repl);
     let is_auto = matches!(cli.command, hermes_interface::cli::Commands::Auto);
+    let is_login = matches!(cli.command, hermes_interface::cli::Commands::Login { .. });
 
-    if is_chat {
+    if is_login {
+        // 登录命令独立处理，不初始化 HermesOS
+        let no_browser = match &cli.command {
+            Commands::Login { no_browser } => *no_browser,
+            _ => false,
+        };
+        
+        println!("🏛️  HermesOS - Kimi Code 登录\n");
+        
+        let oauth = OAuthManager::new();
+        
+        match oauth.login(!no_browser).await {
+            Ok(token) => {
+                // 保存 token
+                match hermes_interface::oauth::save_token(&token) {
+                    Ok(path) => {
+                        println!("Token 已保存到: {:?}", path);
+                    }
+                    Err(e) => {
+                        eprintln!("警告: 保存 token 失败: {}", e);
+                    }
+                }
+                
+                // 更新配置文件
+                if let Err(e) = hermes_interface::oauth::update_config_api_key(&token.access_token).await {
+                    eprintln!("警告: 更新配置文件失败: {}", e);
+                    println!("请手动将以下 token 添加到配置文件:");
+                    println!("api_key = \"{}...\"", &token.access_token[..50.min(token.access_token.len())]);
+                }
+                
+                println!("\n✨ 登录成功！现在可以运行: hermes auto");
+            }
+            Err(e) => {
+                eprintln!("\n❌ 登录失败: {}", e);
+                process::exit(1);
+            }
+        }
+        return;
+    } else if is_chat {
         // 启动 TUI 交互模式
         println!("启动 HermesOS TUI 交互模式...");
         
@@ -70,7 +110,7 @@ async fn main() {
     } else if is_auto {
         // 自主模式 - 配置已加载，直接运行
         // 这里的逻辑在 cli.rs 的 Commands::Auto 分支中处理
-        let mut hermes = match HermesOS::initialize().await {
+        let hermes = match HermesOS::initialize().await {
             Ok(h) => h,
             Err(e) => {
                 eprintln!("无法初始化 HermesOS: {}", e);
@@ -78,13 +118,13 @@ async fn main() {
             }
         };
         
-        if let Err(e) = run(cli, &mut hermes, config).await {
+        if let Err(e) = run(cli, hermes, config).await {
             eprintln!("错误: {}", e);
             process::exit(1);
         }
     } else {
         // 运行普通 CLI
-        let mut hermes = match HermesOS::initialize().await {
+        let hermes = match HermesOS::initialize().await {
             Ok(h) => h,
             Err(e) => {
                 eprintln!("无法初始化 HermesOS: {}", e);
@@ -92,7 +132,7 @@ async fn main() {
             }
         };
         
-        if let Err(e) = run(cli, &mut hermes, config).await {
+        if let Err(e) = run(cli, hermes, config).await {
             eprintln!("错误: {}", e);
             process::exit(1);
         }

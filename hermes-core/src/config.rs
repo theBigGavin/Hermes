@@ -193,7 +193,7 @@ impl Default for Config {
                 base_url: "https://api.moonshot.cn/v1".to_string(),
                 api_key: String::new(), // 需要用户填写
                 model: "kimi-latest".to_string(),
-                timeout_secs: 120,
+                timeout_secs: 60,
                 max_context_length: 8192,
                 temperature: 0.7,
                 max_tokens: 2048,

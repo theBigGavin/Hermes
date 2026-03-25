@@ -14,6 +14,7 @@ pub mod tui;
 pub mod repl;
 pub mod kimi_bridge;
 pub mod autonomous;
+pub mod oauth;
 
 pub use autonomous::run_autonomous;
 

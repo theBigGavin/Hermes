@@ -87,6 +87,13 @@ pub enum Commands {
     
     /// 自主模式（版本 C - 持续运行）
     Auto,
+    
+    /// 登录 Kimi Code（OAuth 授权）
+    Login {
+        /// 不自动打开浏览器
+        #[arg(long)]
+        no_browser: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -114,7 +121,7 @@ pub enum ActionCommand {
 /// 运行 CLI
 pub async fn run(
     cli: Cli, 
-    hermes: &mut crate::HermesOS,
+    mut hermes: crate::HermesOS,
     config: hermes_core::Config,
 ) -> anyhow::Result<()> {
     // 设置日志
@@ -306,7 +313,7 @@ pub async fn run(
         }
 
         Commands::Repl => {
-            crate::repl::run_repl(hermes).await?;
+            crate::repl::run_repl(&mut hermes).await?;
         }
         
         Commands::Auto => {
@@ -317,24 +324,49 @@ pub async fn run(
                 eprintln!("错误: LLM API Key 未配置");
                 eprintln!("请在配置文件中设置 api_key:");
                 eprintln!("  配置文件路径: ~/.config/hermes/config.toml");
-                eprintln!("  或运行: hermes config --init");
+                eprintln!("  或运行: hermes login 进行 OAuth 授权");
                 return Ok(());
             }
             
             println!("使用模型: {}", config.llm.model);
             println!();
             
-            // 自主模式需要独占 HermesOS，创建独立实例
-            let hermes_local = match crate::HermesOS::initialize().await {
-                Ok(h) => h,
-                Err(e) => {
-                    eprintln!("无法初始化 HermesOS: {}", e);
-                    return Ok(());
-                }
-            };
-            
-            if let Err(e) = crate::autonomous::run_autonomous(hermes_local, config).await {
+            // 使用传入的 hermes 实例（已在 main.rs 中初始化）
+            if let Err(e) = crate::autonomous::run_autonomous(hermes, config).await {
                 eprintln!("自主模式错误: {}", e);
+            }
+        }
+        
+        Commands::Login { no_browser } => {
+            println!("🏛️  HermesOS - Kimi Code 登录\n");
+            
+            let oauth = crate::oauth::OAuthManager::new();
+            
+            match oauth.login(!no_browser).await {
+                Ok(token) => {
+                    // 保存 token
+                    match crate::oauth::save_token(&token) {
+                        Ok(path) => {
+                            println!("Token 已保存到: {:?}", path);
+                        }
+                        Err(e) => {
+                            eprintln!("警告: 保存 token 失败: {}", e);
+                        }
+                    }
+                    
+                    // 更新配置文件
+                    if let Err(e) = crate::oauth::update_config_api_key(&token.access_token).await {
+                        eprintln!("警告: 更新配置文件失败: {}", e);
+                        println!("请手动将以下 token 添加到配置文件:");
+                        println!("api_key = \"{}\"", &token.access_token[..50.min(token.access_token.len())]);
+                    }
+                    
+                    println!("\n✨ 登录成功！现在可以运行: hermes auto");
+                }
+                Err(e) => {
+                    eprintln!("\n❌ 登录失败: {}", e);
+                    std::process::exit(1);
+                }
             }
         }
     }
