@@ -103,13 +103,15 @@ pub struct KimiBridge {
     conversation_history: Vec<Message>,
     /// 当前上下文窗口
     current_context: Vec<Message>,
+    /// HermesOS 诞生时间戳（Unix 秒数）
+    birth_timestamp: u64,
 }
 
 impl KimiBridge {
     /// 创建新的 Kimi Bridge
     pub fn new(config: LLMConfig) -> Result<Self> {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))  // 总超时 30 秒
+            .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
             .pool_idle_timeout(Duration::from_secs(30))
             .pool_max_idle_per_host(5)
@@ -120,13 +122,50 @@ impl KimiBridge {
         
         let system_prompt = Self::build_system_prompt();
         
+        // 读取或初始化诞生时间
+        let birth_timestamp = Self::get_or_create_birth_timestamp();
+        
         Ok(Self {
             config,
             client,
             system_prompt,
             conversation_history: vec![],
             current_context: vec![],
+            birth_timestamp,
         })
+    }
+    
+    /// 获取或创建诞生时间戳
+    fn get_or_create_birth_timestamp() -> u64 {
+        let birth_path = dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("hermes")
+            .join("birth_timestamp");
+        
+        // 尝试读取已有的诞生时间
+        if let Ok(content) = std::fs::read_to_string(&birth_path) {
+            if let Ok(timestamp) = content.trim().parse::<u64>() {
+                return timestamp;
+            }
+        }
+        
+        // 首次启动，记录当前时间为诞生时间
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        
+        // 保存到文件
+        if let Some(parent) = birth_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = std::fs::File::create(&birth_path) {
+            let _ = file.write_all(now.to_string().as_bytes());
+        }
+        
+        println!("🎂 HermesOS 今日诞生！这是第 0 天。");
+        
+        now
     }
     
     /// 构建系统提示词 - 精简版，减少请求体大小
@@ -239,10 +278,12 @@ impl KimiBridge {
     
     /// 构建上下文（包含系统提示词）
     fn build_context(&self) -> Vec<Message> {
-        let day = std::time::SystemTime::now()
+        // 计算从诞生之日起的天数
+        let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() / 86400;
+            .as_secs();
+        let day = (now - self.birth_timestamp) / 86400;
         
         let system_msg = Message::system(
             self.system_prompt.replace("{}", &day.to_string())

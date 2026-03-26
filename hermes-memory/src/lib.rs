@@ -229,6 +229,8 @@ pub struct SelfModel {
     pub identity: Identity,
     pub capabilities: Capabilities,
     pub version_history: Vec<VersionRecord>,
+    /// 诞生时间戳（Unix 秒数）
+    pub birth_timestamp: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -268,6 +270,7 @@ impl Default for SelfModel {
                 can_self_modify: true,
             },
             version_history: vec![],
+            birth_timestamp: None,
         }
     }
 }
