@@ -167,21 +167,18 @@ impl KimiBridge {
         println!("📡 发送请求到 Kimi API...");
         let start_time = std::time::Instant::now();
         
-        // 模拟 Kimi CLI 的请求头
+        // Kimi Code API 需要模拟 Kimi CLI 请求头（无论是 OAuth 还是专属 API Key）
         let device_id = Self::get_or_create_device_id();
         let hostname = hostname::get().unwrap_or_default().to_string_lossy().to_string();
         let os_version = sys_info::os_release().unwrap_or_else(|_| "6.17.0-generic".to_string());
         let device_model = format!("Linux {} {}", std::env::consts::OS, std::env::consts::ARCH);
         
         debug!(
-            "Kimi API 请求: model={}, messages={}, timeout={}s",
-            self.config.model, request.messages.len(), self.config.timeout_secs
+            "Kimi API 请求: model={}, messages={}, device_id={}",
+            self.config.model, request.messages.len(), device_id
         );
         
-        println!("   目标 URL: {}/chat/completions", self.config.base_url);
-        println!("   超时设置: {}s", self.config.timeout_secs);
-        
-        // 使用 tokio timeout 包装请求，确保不会永远卡住
+        // 构建请求（所有 Kimi Code 请求都需要模拟 CLI 请求头）
         let request_future = self.client
             .post(format!("{}/chat/completions", self.config.base_url))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
@@ -196,7 +193,7 @@ impl KimiBridge {
             .json(&request)
             .send();
         
-        // 使用更长的超时，观察是否是正常延迟
+        // 使用超时
         let response = match timeout(Duration::from_secs(60), request_future).await {
             Ok(Ok(resp)) => resp,
             Ok(Err(e)) => {
@@ -204,7 +201,7 @@ impl KimiBridge {
                 return Err(HermesError::Other(format!("API 请求失败: {}", e)));
             }
             Err(_) => {
-                println!("❌ 请求超时 (>60s)，可能是网络连接问题");
+                println!("❌ 请求超时 (>60s)");
                 return Err(HermesError::Other("API 请求超时".to_string()));
             }
         };
