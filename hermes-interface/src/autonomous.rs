@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use hermes_core::Result;
 use hermes_memory::checkpoint::{AutoCheckpointCondition, CheckpointManager, FullState};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -122,59 +123,139 @@ impl AutonomousSystem {
             }
         }
         
+        println!("💡 提示: 输入 'help' 查看可用命令，或 'quit' 退出\n");
+        
         let mut paused = false;
         
+        // 创建 stdin 读取器
+        let stdin = tokio::io::stdin();
+        let reader = BufReader::new(stdin);
+        let mut stdin_lines = reader.lines();
+        
         loop {
-            // 处理控制命令
-            while let Ok(cmd) = self.control_rx.try_recv() {
-                match cmd {
-                    ControlCommand::Pause => {
-                        info!("收到暂停命令");
-                        paused = true;
-                    }
-                    ControlCommand::Resume => {
-                        info!("收到恢复命令");
-                        paused = false;
-                    }
-                    ControlCommand::Shutdown => {
-                        info!("收到关机命令，保存状态...");
-                        let _ = self.save_state_before_shutdown().await;
-                        println!("\n👋 Hermes: 我已进入睡眠，等待下次唤醒...\n");
-                        return Ok(());
-                    }
-                    ControlCommand::CreateCheckpoint(name) => {
-                        let _ = self.create_manual_checkpoint(&name).await;
-                    }
-                    ControlCommand::Rollback(id) => {
-                        let _ = self.rollback_to_checkpoint(&id).await;
+            // 使用 select 同时处理控制命令和用户输入
+            tokio::select! {
+                // 处理控制命令
+                cmd = self.control_rx.recv() => {
+                    if let Some(cmd) = cmd {
+                        match cmd {
+                            ControlCommand::Pause => {
+                                info!("收到暂停命令");
+                                paused = true;
+                            }
+                            ControlCommand::Resume => {
+                                info!("收到恢复命令");
+                                paused = false;
+                            }
+                            ControlCommand::Shutdown => {
+                                info!("收到关机命令，保存状态...");
+                                let _ = self.save_state_before_shutdown().await;
+                                println!("\n👋 Hermes: 我已进入睡眠，等待下次唤醒...\n");
+                                return Ok(());
+                            }
+                            ControlCommand::CreateCheckpoint(name) => {
+                                let _ = self.create_manual_checkpoint(&name).await;
+                            }
+                            ControlCommand::Rollback(id) => {
+                                let _ = self.rollback_to_checkpoint(&id).await;
+                            }
+                        }
                     }
                 }
-            }
-            
-            if paused {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                continue;
-            }
-            
-            // 主循环迭代
-            if let Err(e) = self.existence_tick().await {
-                error!("存在迭代错误: {}", e);
-                self.consecutive_errors += 1;
                 
-                if self.consecutive_errors >= self.config.max_consecutive_errors {
-                    error!("连续错误过多，请求人类干预");
-                    let _ = self.request_human_intervention(&format!(
-                        "连续 {} 次错误，最后错误: {}",
-                        self.consecutive_errors, e
-                    )).await;
-                    self.consecutive_errors = 0;
+                // 处理用户输入（非阻塞）
+                line = stdin_lines.next_line() => {
+                    if let Ok(Some(line)) = line {
+                        let line = line.trim();
+                        if !line.is_empty() {
+                            self.handle_user_command(line).await;
+                        }
+                    }
                 }
-            } else {
-                self.consecutive_errors = 0;
+                
+                // 定期执行存在迭代
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                    if !paused {
+                        if let Err(e) = self.existence_tick().await {
+                            error!("存在迭代错误: {}", e);
+                            self.consecutive_errors += 1;
+                            
+                            if self.consecutive_errors >= self.config.max_consecutive_errors {
+                                error!("连续错误过多，请求人类干预");
+                                let _ = self.request_human_intervention(&format!(
+                                    "连续 {} 次错误，最后错误: {}",
+                                    self.consecutive_errors, e
+                                )).await;
+                                self.consecutive_errors = 0;
+                            }
+                        } else {
+                            self.consecutive_errors = 0;
+                        }
+                    }
+                }
             }
-            
-            // 等待下一次迭代
-            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    }
+    
+    /// 处理用户输入的命令
+    async fn handle_user_command(&mut self, cmd: &str) {
+        match cmd.to_lowercase().as_str() {
+            "help" | "?" => {
+                println!("\n📖 可用命令:");
+                println!("  help, ?     - 显示此帮助");
+                println!("  status      - 显示当前状态");
+                println!("  pause       - 暂停自主运行");
+                println!("  resume      - 恢复自主运行");
+                println!("  checkpoint  - 创建检查点");
+                println!("  chat <msg>  - 直接与 Hermes 对话");
+                println!("  quit, exit  - 退出程序\n");
+            }
+            "status" => {
+                println!("\n📊 HermesOS 状态:");
+                println!("  运行时间: {:?}", self.last_perception.elapsed());
+                println!("  观察队列: {} 条", self.observations.len());
+                println!("  连续错误: {} 次\n", self.consecutive_errors);
+            }
+            "pause" => {
+                println!("\n⏸️  Hermes: 自主运行已暂停\n");
+                let _ = self.control_tx.send(ControlCommand::Pause).await;
+            }
+            "resume" => {
+                println!("\n▶️   Hermes: 自主运行已恢复\n");
+                let _ = self.control_tx.send(ControlCommand::Resume).await;
+            }
+            "checkpoint" => {
+                println!("\n💾 正在创建检查点...\n");
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let _ = self.control_tx.send(ControlCommand::CreateCheckpoint(
+                    format!("manual-{}", timestamp)
+                )).await;
+            }
+            "quit" | "exit" => {
+                println!("\n👋 Hermes: 正在关闭...\n");
+                let _ = self.control_tx.send(ControlCommand::Shutdown).await;
+            }
+            _ => {
+                // 其他输入视为聊天消息
+                if cmd.starts_with("chat ") {
+                    let msg = &cmd[5..];
+                    println!("\n👤 你: {}", msg);
+                    match self.kimi.chat(msg).await {
+                        Ok(response) => println!("\n🤖 Hermes: {}\n", response),
+                        Err(e) => println!("\n❌ 错误: {}\n", e),
+                    }
+                } else {
+                    // 默认也是聊天
+                    println!("\n👤 你: {}", cmd);
+                    match self.kimi.chat(cmd).await {
+                        Ok(response) => println!("\n🤖 Hermes: {}\n", response),
+                        Err(e) => println!("\n❌ 错误: {}\n", e),
+                    }
+                }
+            }
         }
     }
     
