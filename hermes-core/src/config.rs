@@ -148,8 +148,8 @@ impl Default for Config {
             },
             safety: SafetyConfig {
                 filesystem: FilesystemSafety {
-                    read: vec!["./**".to_string()],
-                    write: vec!["./**".to_string()],
+                    read: vec![".".to_string(), "./**".to_string()],
+                    write: vec![".".to_string(), "./**".to_string()],
                     forbidden: vec![
                         "~/.ssh/**".to_string(),
                         "~/.password*".to_string(),
