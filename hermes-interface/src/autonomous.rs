@@ -106,20 +106,62 @@ impl AutonomousSystem {
         self.control_tx.clone()
     }
     
+    /// 收集真实状态（非 LLM 幻觉）
+    async fn collect_real_status(&self) -> crate::self_status::RealSelfStatus {
+        use crate::self_status::RealSelfStatus;
+        
+        let memory = self.hermes.memory();
+        let birth_timestamp = self.kimi.birth_timestamp();
+        
+        match RealSelfStatus::collect(&*memory, birth_timestamp).await {
+            Ok(status) => status,
+            Err(e) => {
+                warn!("收集真实状态失败: {}", e);
+                // 返回空状态
+                RealSelfStatus {
+                    days_alive: 0,
+                    total_experiences: 0,
+                    total_skills: 0,
+                    total_reflections: 0,
+                    memory_db_size: 0,
+                    checkpoint_count: 0,
+                    config_size: 0,
+                    current_dir: std::env::current_dir().unwrap_or_default(),
+                    uptime: Duration::from_secs(0),
+                    last_checkpoint: None,
+                }
+            }
+        }
+    }
+    
     /// 主循环 - 我的存在
     pub async fn existence_loop(mut self) -> Result<()> {
         info!("=== HermesOS 自主模式启动 ===");
         info!("版本: {}", hermes_core::VERSION);
         info!("配置: {:?}", self.config);
         
+        // 收集真实状态
+        let real_status = self.collect_real_status().await;
+        
+        // 构建带有真实状态的问候消息
+        let greeting_prompt = format!(
+            r#"我已启动。以下是我的真实状态，请基于此生成状态报告：
+
+{}
+
+请基于以上真实数据生成欢迎消息。不要编造不存在的技能或经验。"#,
+            real_status.format_report()
+        );
+        
         // 初始问候
-        match self.kimi.chat("我已启动，请告诉我当前的状态").await {
+        match self.kimi.chat(&greeting_prompt).await {
             Ok(greeting) => {
                 println!("\n🤖 Hermes: {}\n", greeting);
             }
             Err(e) => {
                 warn!("无法获取初始问候: {}", e);
-                println!("\n🤖 Hermes: 我已启动。当前运行在自主模式。\n");
+                // 使用真实状态作为回退
+                println!("\n🤖 Hermes: {}\n", real_status.format_report());
             }
         }
         
@@ -211,10 +253,8 @@ impl AutonomousSystem {
                 println!("  quit, exit  - 退出程序\n");
             }
             "status" => {
-                println!("\n📊 HermesOS 状态:");
-                println!("  运行时间: {:?}", self.last_perception.elapsed());
-                println!("  观察队列: {} 条", self.observations.len());
-                println!("  连续错误: {} 次\n", self.consecutive_errors);
+                let status = self.collect_real_status().await;
+                println!("\n{}", status.format_report());
             }
             "pause" => {
                 println!("\n⏸️  Hermes: 自主运行已暂停\n");

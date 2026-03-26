@@ -135,6 +135,11 @@ impl KimiBridge {
         })
     }
     
+    /// 获取诞生时间戳（公开接口）
+    pub fn birth_timestamp(&self) -> u64 {
+        self.birth_timestamp
+    }
+    
     /// 获取或创建诞生时间戳
     fn get_or_create_birth_timestamp() -> u64 {
         let birth_path = dirs::config_dir()

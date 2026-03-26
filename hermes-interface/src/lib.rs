@@ -15,6 +15,7 @@ pub mod repl;
 pub mod kimi_bridge;
 pub mod autonomous;
 pub mod oauth;
+pub mod self_status;
 
 pub use autonomous::run_autonomous;
 
